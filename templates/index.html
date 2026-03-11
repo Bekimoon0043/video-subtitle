@@ -29,14 +29,14 @@
     </section>
 
     <section>
-        <h2>2. Transcribe Audio (with timestamps)</h2>
+        <h2>2. Transcribe Audio (with sentence timestamps)</h2>
         <form id="transcribeForm">
             <input type="file" name="audio" accept="audio/*" required>
             <button type="submit" id="transcribeButton">Transcribe</button>
         </form>
         <div id="loading" class="loading" style="display: none;">⏳ Processing... This may take a moment.</div>
         <div id="transcriptionResult" class="result" style="white-space: pre-wrap;"></div>
-        <div id="wordsTableContainer" style="margin-top: 15px;"></div>
+        <div id="sentencesContainer" style="margin-top: 15px;"></div>
         <div id="transcriptionError" class="error" style="display: none;"></div>
     </section>
 
@@ -57,14 +57,14 @@
         const loadingDiv = document.getElementById('loading');
         const resultDiv = document.getElementById('transcriptionResult');
         const errorDiv = document.getElementById('transcriptionError');
-        const wordsContainer = document.getElementById('wordsTableContainer');
+        const sentencesContainer = document.getElementById('sentencesContainer');
 
         transcribeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             // Clear previous results/errors
             resultDiv.innerText = '';
-            wordsContainer.innerHTML = '';
+            sentencesContainer.innerHTML = '';
             errorDiv.style.display = 'none';
             errorDiv.innerText = '';
 
@@ -95,16 +95,16 @@
                 // Display full text
                 resultDiv.innerText = data.text || '(empty transcription)';
 
-                // Display word timestamps table if words exist
-                if (data.words && data.words.length > 0) {
-                    let tableHtml = '<h3>Word Timestamps</h3><table><tr><th>Word</th><th>Start (s)</th><th>End (s)</th></tr>';
-                    data.words.forEach(w => {
-                        tableHtml += `<tr><td>${w.word}</td><td>${w.start.toFixed(2)}</td><td>${w.end.toFixed(2)}</td></tr>`;
+                // Display sentence timestamps
+                if (data.sentences && data.sentences.length > 0) {
+                    let tableHtml = '<h3>Sentence Timestamps</h3><table><tr><th>Start (s)</th><th>End (s)</th><th>Text</th></tr>';
+                    data.sentences.forEach(s => {
+                        tableHtml += `<tr><td>${s.start.toFixed(2)}</td><td>${s.end.toFixed(2)}</td><td>${s.text}</td></tr>`;
                     });
                     tableHtml += '</table>';
-                    wordsContainer.innerHTML = tableHtml;
+                    sentencesContainer.innerHTML = tableHtml;
                 } else {
-                    wordsContainer.innerHTML = '<p>No word timestamps available.</p>';
+                    sentencesContainer.innerHTML = '<p>No sentence timestamps available.</p>';
                 }
             } catch (error) {
                 errorDiv.innerText = `Error: ${error.message}`;
