@@ -78,7 +78,7 @@ def separate_audio():
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
-    """Transcribe uploaded audio using Vosk."""
+    """Transcribe uploaded audio using Vosk and return text + word timestamps."""
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
     audio_file = request.files['audio']
@@ -112,21 +112,34 @@ def transcribe_audio():
         return jsonify({'error': 'Audio file must be WAV format mono PCM.'}), 400
 
     recognizer = KaldiRecognizer(model, wf.getframerate())
-    recognizer.SetWords(False)
+    recognizer.SetWords(True)  # Enable word timestamps
 
-    results = []
+    results_text = []
+    all_words = []
+
     while True:
         data = wf.readframes(4000)
         if len(data) == 0:
             break
         if recognizer.AcceptWaveform(data):
             res = json.loads(recognizer.Result())
-            results.append(res.get('text', ''))
-    final_res = json.loads(recognizer.FinalResult())
-    results.append(final_res.get('text', ''))
+            if 'text' in res:
+                results_text.append(res['text'])
+            if 'result' in res:
+                all_words.extend(res['result'])
 
-    full_text = ' '.join(results).strip()
-    return jsonify({'text': full_text})
+    final_res = json.loads(recognizer.FinalResult())
+    if 'text' in final_res:
+        results_text.append(final_res['text'])
+    if 'result' in final_res:
+        all_words.extend(final_res['result'])
+
+    full_text = ' '.join(results_text).strip()
+
+    return jsonify({
+        'text': full_text,
+        'words': all_words   # each word: {word, conf, start, end}
+    })
 
 @app.route('/merge', methods=['POST'])
 def merge_video_audio():
