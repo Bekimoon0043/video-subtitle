@@ -1,4 +1,3 @@
-fastapi
-uvicorn
-python-multipart
-jinja2
+Flask==2.3.3
+Werkzeug==2.3.7
+vosk==0.3.45
