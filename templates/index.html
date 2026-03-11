@@ -1,44 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Media Toolbox</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; }
+        section { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
+        input, button { margin-top: 5px; }
+        .result { margin-top: 10px; background: #f0f0f0; padding: 10px; border-radius: 4px; }
+        .loading { color: #555; font-style: italic; margin-top: 10px; }
+        .error { color: #d32f2f; background: #ffebee; padding: 10px; border-radius: 4px; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>🎬 Media Toolbox</h1>
+    <p>Upload files and perform operations. For n8n, use the same endpoints with form-data.</p>
+
     <section>
-        <h2>4. Merge Video with Translated Audio (Aligned by Sentences)</h2>
-        <form id="mergeTranslatedForm" enctype="multipart/form-data">
-            <label>Original Video:</label>
+        <h2>1. Separate Audio from Video</h2>
+        <form action="/separate" method="post" enctype="multipart/form-data">
+            <input type="file" name="video" accept="video/*" required>
+            <button type="submit">Extract Audio</button>
+        </form>
+    </section>
+
+    <section>
+        <h2>2. Transcribe Audio (with sentence timestamps)</h2>
+        <form id="transcribeForm">
+            <input type="file" name="audio" accept="audio/*" required>
+            <button type="submit" id="transcribeButton">Transcribe</button>
+        </form>
+        <div id="loading" class="loading" style="display: none;">⏳ Processing... This may take a moment.</div>
+        <div id="transcriptionResult" class="result" style="white-space: pre-wrap;"></div>
+        <div id="sentencesContainer" style="margin-top: 15px;"></div>
+        <div id="transcriptionError" class="error" style="display: none;"></div>
+    </section>
+
+    <section>
+        <h2>3. Merge Video & Audio</h2>
+        <form action="/merge" method="post" enctype="multipart/form-data">
             <input type="file" name="video" accept="video/*" required><br>
-
-            <label>Sentences JSON (from transcription step):</label>
-            <input type="file" name="sentences_json" accept=".json,application/json" required><br>
-
-            <label>Translated Audio Files (one per sentence, in same order):</label>
-            <input type="file" name="audio_files" multiple accept="audio/*" required><br>
-
+            <input type="file" name="audio" accept="audio/*" required><br>
             <label>Volume multiplier (e.g., 1.0 = original, 2.0 = double):</label>
             <input type="number" name="volume" step="0.1" value="1.0" required><br>
-
-            <button type="submit" id="mergeTranslatedButton">Merge Translated</button>
+            <button type="submit">Merge & Download</button>
         </form>
-        <div id="mergeTranslatedLoading" class="loading" style="display: none;">⏳ Processing... This may take a moment.</div>
-        <div id="mergeTranslatedError" class="error" style="display: none;"></div>
     </section>
 
     <script>
-        // Existing script for transcribeForm remains unchanged.
-        // Add new handler for mergeTranslatedForm
-        const mergeTranslatedForm = document.getElementById('mergeTranslatedForm');
-        const mergeTranslatedButton = document.getElementById('mergeTranslatedButton');
-        const mergeTranslatedLoading = document.getElementById('mergeTranslatedLoading');
-        const mergeTranslatedError = document.getElementById('mergeTranslatedError');
+        const transcribeForm = document.getElementById('transcribeForm');
+        const transcribeButton = document.getElementById('transcribeButton');
+        const loadingDiv = document.getElementById('loading');
+        const resultDiv = document.getElementById('transcriptionResult');
+        const errorDiv = document.getElementById('transcriptionError');
+        const sentencesContainer = document.getElementById('sentencesContainer');
 
-        mergeTranslatedForm.addEventListener('submit', async (e) => {
+        transcribeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            mergeTranslatedError.style.display = 'none';
-            mergeTranslatedError.innerText = '';
-            mergeTranslatedLoading.style.display = 'block';
-            mergeTranslatedButton.disabled = true;
+            // Clear previous results/errors
+            resultDiv.innerText = '';
+            sentencesContainer.innerHTML = '';
+            errorDiv.style.display = 'none';
+            errorDiv.innerText = '';
 
-            const formData = new FormData(mergeTranslatedForm);
+            // Show loading, disable button
+            loadingDiv.style.display = 'block';
+            transcribeButton.disabled = true;
+
+            const formData = new FormData(transcribeForm);
 
             try {
-                const response = await fetch('/merge-translated', {
+                const response = await fetch('/transcribe', {
                     method: 'POST',
                     body: formData
                 });
@@ -54,23 +91,29 @@
                     throw new Error(errorMsg);
                 }
 
-                // If successful, server returns the merged video file.
-                // Create a download link.
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'translated_merged.mp4';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
+                const data = await response.json();
+                // Display full text
+                resultDiv.innerText = data.text || '(empty transcription)';
+
+                // Display sentence timestamps
+                if (data.sentences && data.sentences.length > 0) {
+                    let tableHtml = '<h3>Sentence Timestamps</h3><table><tr><th>Start (s)</th><th>End (s)</th><th>Text</th></tr>';
+                    data.sentences.forEach(s => {
+                        tableHtml += `<tr><td>${s.start.toFixed(2)}</td><td>${s.end.toFixed(2)}</td><td>${s.text}</td></tr>`;
+                    });
+                    tableHtml += '</table>';
+                    sentencesContainer.innerHTML = tableHtml;
+                } else {
+                    sentencesContainer.innerHTML = '<p>No sentence timestamps available.</p>';
+                }
             } catch (error) {
-                mergeTranslatedError.innerText = `Error: ${error.message}`;
-                mergeTranslatedError.style.display = 'block';
+                errorDiv.innerText = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
             } finally {
-                mergeTranslatedLoading.style.display = 'none';
-                mergeTranslatedButton.disabled = false;
+                loadingDiv.style.display = 'none';
+                transcribeButton.disabled = false;
             }
         });
     </script>
+</body>
+</html>
