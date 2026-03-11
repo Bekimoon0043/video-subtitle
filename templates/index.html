@@ -8,6 +8,9 @@
         section { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
         input, button { margin-top: 5px; }
         .result { margin-top: 10px; background: #f0f0f0; padding: 10px; border-radius: 4px; }
+        .loading { color: #555; font-style: italic; margin-top: 10px; }
+        .error { color: #d32f2f; background: #ffebee; padding: 10px; border-radius: 4px; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -24,11 +27,13 @@
 
     <section>
         <h2>2. Transcribe Audio</h2>
-        <form id="transcribeForm" onsubmit="transcribe(event)">
+        <form id="transcribeForm">
             <input type="file" name="audio" accept="audio/*" required>
-            <button type="submit">Transcribe</button>
+            <button type="submit" id="transcribeButton">Transcribe</button>
         </form>
+        <div id="loading" class="loading" style="display: none;">⏳ Processing... This may take a moment.</div>
         <div id="transcriptionResult" class="result"></div>
+        <div id="transcriptionError" class="error" style="display: none;"></div>
     </section>
 
     <section>
@@ -43,14 +48,55 @@
     </section>
 
     <script>
-        async function transcribe(event) {
-            event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
-            const res = await fetch('/transcribe', { method: 'POST', body: formData });
-            const data = await res.json();
-            document.getElementById('transcriptionResult').innerText = data.text || 'Error: ' + data.error;
-        }
+        const transcribeForm = document.getElementById('transcribeForm');
+        const transcribeButton = document.getElementById('transcribeButton');
+        const loadingDiv = document.getElementById('loading');
+        const resultDiv = document.getElementById('transcriptionResult');
+        const errorDiv = document.getElementById('transcriptionError');
+
+        transcribeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Clear previous results/errors
+            resultDiv.innerText = '';
+            errorDiv.style.display = 'none';
+            errorDiv.innerText = '';
+
+            // Show loading, disable button
+            loadingDiv.style.display = 'block';
+            transcribeButton.disabled = true;
+
+            const formData = new FormData(transcribeForm);
+
+            try {
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    // Try to parse error JSON, otherwise use status text
+                    let errorMsg = `HTTP error ${response.status}`;
+                    try {
+                        const errData = await response.json();
+                        errorMsg = errData.error || errorMsg;
+                    } catch {
+                        errorMsg = response.statusText || errorMsg;
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+                resultDiv.innerText = data.text || '(empty transcription)';
+            } catch (error) {
+                errorDiv.innerText = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+            } finally {
+                // Hide loading, re-enable button
+                loadingDiv.style.display = 'none';
+                transcribeButton.disabled = false;
+            }
+        });
     </script>
 </body>
 </html>
